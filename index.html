@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Senatordle</title>
+  <meta name="description" content="Senatordle — the daily U.S. senator guessing game.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="help-btn" aria-label="How to play" title="How to play">?</button>
+    <h1 class="logo">Senator<span>dle</span></h1>
+    <button class="icon-btn" id="stats-btn" aria-label="Statistics" title="Statistics">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 20h3V10H4v10zm6.5 0h3V4h-3v16zM17 20h3v-7h-3v7z"/></svg>
+    </button>
+  </header>
+
+  <main class="container">
+    <p class="meta" id="meta"></p>
+
+    <section id="no-puzzle" class="card empty" hidden>
+      <h2>No puzzle today</h2>
+      <p>There's no Senatordle scheduled for this date yet. Check back tomorrow!</p>
+    </section>
+
+    <div id="game" hidden>
+      <nav class="tabs" role="tablist" aria-label="Rounds">
+        <button class="tab" role="tab" data-round="normal" id="tab-normal" aria-controls="round-panel">
+          Normal <span class="tab-status" data-status-for="normal"></span>
+        </button>
+        <button class="tab" role="tab" data-round="hard" id="tab-hard" aria-controls="round-panel">
+          Hard <span class="tab-status" data-status-for="hard"></span>
+        </button>
+      </nav>
+
+      <section id="round-panel" role="tabpanel" class="card">
+        <div class="round-head">
+          <h2 id="round-title"></h2>
+          <span class="clue-counter" id="clue-counter"></span>
+        </div>
+
+        <ol class="clues" id="clues"></ol>
+
+        <div id="play-area">
+          <div class="filters" id="filters">
+            <label class="filter" id="filter-state-wrap">
+              <span class="sr-only">Filter by state</span>
+              <select id="filter-state"><option value="">All states</option></select>
+            </label>
+            <label class="filter" id="filter-party-wrap">
+              <span class="sr-only">Filter by party</span>
+              <select id="filter-party"><option value="">All parties</option></select>
+            </label>
+          </div>
+
+          <form class="guess-form" id="guess-form" autocomplete="off">
+            <div class="combo">
+              <input id="guess-input" type="text" role="combobox"
+                     aria-autocomplete="list" aria-expanded="false" aria-controls="guess-list"
+                     placeholder="Search for a senator…" spellcheck="false">
+              <ul id="guess-list" class="results" role="listbox" hidden></ul>
+            </div>
+            <button type="submit" class="btn primary" id="guess-btn" disabled>Guess</button>
+          </form>
+
+          <div class="actions">
+            <button type="button" class="btn ghost" id="skip-btn">Skip to next clue</button>
+            <button type="button" class="btn ghost danger" id="giveup-btn">Give up</button>
+          </div>
+        </div>
+
+        <div id="result" class="result" hidden></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span>Next puzzle in <strong id="countdown">--:--:--</strong></span>
+  </footer>
+
+  <!-- How to play -->
+  <dialog id="help-dialog" class="modal">
+    <form method="dialog"><button class="icon-btn close" aria-label="Close">×</button></form>
+    <h2>How to play</h2>
+    <p>Each day there are two mystery U.S. senators to find:</p>
+    <ul>
+      <li><strong>Normal</strong>: a well-known senator.</li>
+      <li><strong>Hard</strong>: a lesser-known senator.</li>
+    </ul>
+    <p>You start with one clue. Each clue is more specific than the last. After every clue you can:</p>
+    <ul>
+      <li><strong>Guess</strong>: search the database by name, and filter by state or party. A wrong guess reveals the next clue.</li>
+      <li><strong>Skip</strong>: reveal the next clue without guessing.</li>
+    </ul>
+    <p>The fewer clues you need, the better. A wrong guess after the final clue ends the round.</p>
+    <p class="muted">If a clue in today's puzzle gives away the senator's state or party, that filter stays hidden until you reach the clue.</p>
+    <p class="muted">A new puzzle comes out every day at midnight, your local time.</p>
+  </dialog>
+
+  <!-- Statistics -->
+  <dialog id="stats-dialog" class="modal">
+    <form method="dialog"><button class="icon-btn close" aria-label="Close">×</button></form>
+    <h2>Statistics</h2>
+    <div class="stats-tabs" role="tablist">
+      <button class="chip" data-stats-round="normal">Normal</button>
+      <button class="chip" data-stats-round="hard">Hard</button>
+    </div>
+    <div id="stats-body"></div>
+    <button class="btn primary share-btn" id="stats-share-btn">Share today's results</button>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Data first, then app -->
+  <script src="js/config.js"></script>
+  <script src="data/senators.js"></script>
+  <script src="data/puzzles.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
