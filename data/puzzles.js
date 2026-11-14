@@ -49,6 +49,8 @@ window.PUZZLES = {
     },
   },
 
+
+
   '2026-11-15': {
     normal: {
       answer: 'bernie-sanders',
@@ -81,4 +83,8 @@ window.PUZZLES = {
       ],
     },
   },
+
+
+
+  
 };
