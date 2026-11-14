@@ -1,6 +1,7 @@
 /*
- * Senatordle main controller: picks today's puzzle, runs the rounds,
- * draws the UI, and handles stats and sharing.
+ * Senatordle main controller: picks today's puzzle, runs the rounds, drives
+ * the title and play screens and the seating-chart animation, and handles
+ * stats and sharing.
  */
 (function () {
   'use strict';
@@ -10,7 +11,17 @@
   const PUZZLES = window.PUZZLES || {};
   const BY_ID = new Map(SENATORS.map(s => [s.id, s]));
   const { yearsLabel, photoUrl, escapeHtml } = window.SenatorSearch;
+  const Chart = window.SenateChart;
   const $ = id => document.getElementById(id);
+
+  // Animation timing (ms). Keep in sync with the transitions in css/style.css.
+  const T_ROTATE = 650;  // fan rotating to the next seat
+  const T_SLIDE = 600;   // seat bar wiping away
+  const TWO_LINE_CARD_H = 88; // px; card height used to size cards to the bars
+  const T_OUT = 650;     // bars spinning out when switching rounds
+  const SWITCH_SPIN = 120; // degrees the fan spins out (and back in) on a round switch
+  const SLIDE_LAG = 60;  // bar starts sliding just after the card under it is in place
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ---------- Dates ---------------------------------------------------- */
   const pad = n => String(n).padStart(2, '0');
@@ -18,6 +29,8 @@
   const parseISO = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const addDays = (iso, n) => { const d = parseISO(iso); d.setDate(d.getDate() + n); return toISO(d); };
   const dayDiff = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 86400000);
+  const MONTHS = ['Jan.', 'Feb.', 'March', 'April', 'May', 'June', 'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
+  const shortDate = iso => { const d = parseISO(iso); return `${MONTHS[d.getMonth()]} ${d.getDate()}`; };
 
   const TODAY = toISO(new Date());
   const requested = new URLSearchParams(location.search).get('date');
@@ -54,19 +67,17 @@
     });
   }
 
-  /* ---------- State ---------------------------------------------------- */
+  /* ---------- Game state ----------------------------------------------- */
   const day = PUZZLES[DATE];
   const rounds = CFG.rounds.filter(r => day && day[r.key] && BY_ID.has(day[r.key].answer));
   const puzzles = {};
   const games = {};
-  const lastShownRevealed = {};
   rounds.forEach(r => {
     puzzles[r.key] = normalizePuzzle(day[r.key]);
     games[r.key] = Store.loadGame(DATE, r.key);
     // Fix up saved state if the puzzle was edited after it was saved.
     const g = games[r.key];
     g.revealed = Math.min(Math.max(1, g.revealed), puzzles[r.key].clues.length);
-    lastShownRevealed[r.key] = g.revealed;
   });
   let current = (rounds.find(r => games[r.key].status === 'playing') || rounds[0] || {}).key;
 
@@ -102,6 +113,7 @@
 
   /* ---------- Actions -------------------------------------------------- */
   function submitGuess() {
+    if (switching) return;
     const s = search.getSelected();
     const g = game();
     if (!s || g.status !== 'playing') return;
@@ -117,6 +129,7 @@
   }
 
   function skip() {
+    if (switching) return;
     const g = game();
     if (g.status !== 'playing') return;
     g.guesses.push({ clue: g.revealed, id: null });
@@ -125,6 +138,7 @@
   }
 
   function giveUp() {
+    if (switching) return;
     if (game().status !== 'playing') return;
     finish('lost');
   }
@@ -152,31 +166,318 @@
     Store.saveGame(DATE, current, game());
   }
 
+  /**
+   * Change rounds. In play mode the bars spin out and the new round's bars spin
+   * in (see spinOutIn), so the two rounds' progress never overlaps on screen.
+   * Hard mode's colors fade in at the same time.
+   */
   function switchRound(key) {
-    if (!puzzles[key] || key === current) return;
-    current = key;
+    if (!puzzles[key] || key === current || switching) return;
     search.reset();
-    render();
+    if (mode !== 'play' || REDUCED) { current = key; render(); return; }
+    document.body.classList.toggle('round-hard', key === 'hard');
+    spinOutIn(() => { current = key; });
   }
 
-  /* ---------- Rendering ------------------------------------------------ */
-  function render() {
-    renderTabs();
+  /**
+   * The seating chart's transition, used when starting play and when switching
+   * rounds:
+   *  1. Out: every bar wipes back into the circle while the fan spins forward,
+   *     and the clues fade out.
+   *  2. `swap()` runs (e.g. changes round), and the bars are rebuilt hidden in
+   *     the circle, a spin's worth behind their target.
+   *  3. In: the fan spins into place and the bars that still hide clues grow
+   *     back out, along with the current clue's bar; earlier clues reappear.
+   *  4. The current clue's bar wipes away, uncovering its clue.
+   */
+  let switching = false;
+  let goneOverride = null; // while spinning in: how many bars count as revealed
+  function spinOutIn(swap) {
+    switching = true;
+    stackEl.classList.add('switching');
+    seats.forEach(seat => { seat.style.setProperty('--d', '0ms'); seat.classList.add('gone'); seat.classList.remove('next'); });
+    setRotation(rotation + SWITCH_SPIN);
+
+    setTimeout(() => {
+      swap();
+      const n = puzzle().clues.length;
+      const g = game();
+      seatsEl.classList.add('instant');
+      buildSeats(n, `${current}:${n}`);
+      seats.forEach(seat => { seat.style.setProperty('--d', '0ms'); seat.classList.add('gone'); });
+      setRotation(Chart.rotationFor(g.revealed - 1, n) - SWITCH_SPIN);
+      seatsEl.getBoundingClientRect();
+      seatsEl.classList.remove('instant');
+      stackEl.innerHTML = '';
+      stackKey = current;
+      stackEl.classList.remove('switching');
+
+      // Spin in with the current clue still covered (if the round is in progress).
+      goneOverride = g.status === 'playing' ? g.revealed - 1 : null;
+      switchCardDelay = T_ROTATE;
+      render();
+      setTimeout(() => {
+        goneOverride = null;
+        render(); // the current clue's bar wipes away
+        switching = false;
+      }, T_ROTATE);
+    }, T_OUT);
+  }
+
+  /* ---------- Screens -------------------------------------------------- */
+  let mode = 'title';
+  let pendingDelay = 0;  // extra wait before bars slide (unused unless set by a transition)
+
+  function setMode(next) {
+    if (next === mode || switching) return;
+    mode = next;
+    document.body.classList.toggle('mode-title', mode === 'title');
+    document.body.classList.toggle('mode-play', mode === 'play');
+    if (mode === 'play' && !REDUCED) {
+      // The chart moves into place while its bars spin out, then they spin back in.
+      document.body.classList.toggle('round-hard', current === 'hard');
+      renderTabs();
+      renderPanel();
+      spinOutIn(() => {});
+      layout();
+    } else {
+      render();
+    }
+    if (mode === 'play' && game().status === 'playing' && matchMedia('(pointer: fine)').matches) {
+      setTimeout(() => $('guess-input').focus({ preventScroll: true }), REDUCED ? 0 : T_OUT + T_ROTATE);
+    }
+  }
+
+  /* ---------- Seating chart -------------------------------------------- */
+  const seatsEl = $('seats');
+  let seats = [];
+  let seatsKey = null;      // which round (and clue count) the bars were built for
+  let rotation = 0;
+
+  function buildSeats(n, key) {
+    seats = Chart.build(seatsEl, n);
+    seatsKey = key;
+    seatsEl.getBoundingClientRect(); // flush styles so the next changes animate
+  }
+
+  /**
+   * Update bars and rotation. Returns the delay (ms) until a bar that is now
+   * wiping away is in place over its clue, or -1 if no bar started wiping.
+   */
+  function renderChart() {
+    const n = current ? puzzle().clues.length : 10;
+    const key = `${current}:${n}`;
+    if (seatsKey !== key) buildSeats(n, key);
+
+    if (mode === 'title') {
+      seats.forEach(seat => { seat.classList.remove('gone', 'next'); seat.style.removeProperty('--d'); });
+      setRotation(0);
+      return -1;
+    }
+
+    const g = game();
+    const shown = goneOverride ?? g.revealed; // bars currently counted as revealed
+    const target = Chart.rotationFor(g.revealed - 1, n);
+    const rotating = target !== rotation;
+    let delay = pendingDelay || (rotating && !REDUCED ? T_ROTATE : 0);
+    pendingDelay = 0;
+    let newlyGone = false;
+    seats.forEach((seat, i) => {
+      const gone = i < shown;
+      if (gone && !seat.classList.contains('gone')) {
+        seat.style.setProperty('--d', `${delay + SLIDE_LAG}ms`);
+        newlyGone = true;
+      }
+      seat.classList.toggle('gone', gone);
+      seat.classList.toggle('next', g.status === 'playing' && goneOverride === null && i === g.revealed);
+    });
+    setRotation(target);
+    return newlyGone ? delay : -1;
+  }
+
+  function setRotation(deg) {
+    rotation = deg;
+    seatsEl.style.transform = `rotate(${deg}deg)`;
+  }
+
+  function renderHub() {
+    const el = $('hub-label');
+    if (mode !== 'play' || !current) { el.innerHTML = ''; return; }
+    const g = game();
+    const n = puzzle().clues.length;
+    if (g.status === 'won') {
+      el.innerHTML = `<span class="hub-small">Solved in</span><span class="hub-big">${g.revealed}</span><span class="hub-small">${g.revealed === 1 ? 'clue' : 'clues'}</span>`;
+    } else if (g.status === 'lost') {
+      el.innerHTML = `<span class="hub-small">Not solved</span><span class="hub-big">✗</span><span class="hub-small">${n} clues</span>`;
+    } else {
+      el.innerHTML = `<span class="hub-small">Clue</span><span class="hub-big">${g.revealed}</span><span class="hub-small">of ${n}</span>`;
+    }
+  }
+
+  /* ---------- Clue stack ----------------------------------------------- */
+  const stackEl = $('clue-stack');
+  let stackKey = null;
+
+  function guessLine(guess, answerId) {
+    if (!guess.id) return '<li class="g skip">Skipped</li>';
+    const s = BY_ID.get(guess.id);
+    const name = s ? escapeHtml(s.name) : escapeHtml(guess.id);
+    return guess.id === answerId
+      ? `<li class="g right"><span aria-hidden="true">✓</span> ${name}</li>`
+      : `<li class="g wrong"><span aria-hidden="true">✗</span> ${name}</li>`;
+  }
+
+  /**
+   * Add a card for each revealed clue. A newly revealed card is placed under its
+   * seat bar (hidden until the bar rotates into place, then clipped to the bar's
+   * outline) so that the bar sliding away uncovers it.
+   */
+  function renderStack(revealDelay, underBar) {
+    if (mode !== 'play' || !current) return;
+    if (stackKey !== current) { stackEl.innerHTML = ''; stackKey = current; }
+    const p = puzzle();
+    const g = game();
+    const count = goneOverride ?? g.revealed;
+    for (let i = 0; i < count; i++) {
+      let li = stackEl.children[i];
+      if (!li) {
+        li = document.createElement('li');
+        li.className = 'clue-card pending';
+        li.innerHTML = `<div class="clue-inner"><span class="clue-num">${i + 1}</span><div class="clue-body"><p class="clue-text"></p><ul class="clue-guesses"></ul></div></div>`;
+        li.querySelector('.clue-text').textContent = p.clues[i].text;
+        stackEl.appendChild(li);
+        uncover(li, revealDelay, underBar && i === count - 1);
+      }
+      li.classList.toggle('latest', i === g.revealed - 1);
+      li.querySelector('.clue-guesses').innerHTML =
+        g.guesses.filter(x => x.clue === i + 1).map(x => guessLine(x, p.answer)).join('');
+    }
+    while (stackEl.children.length > count) stackEl.lastChild.remove();
+  }
+
+  /** Show a card once its bar covers it, then open its clip as the bar slides away. */
+  function uncover(li, delay, underBar) {
+    if (underBar) li.dataset.cover = 'on';
+    setTimeout(() => {
+      li.classList.remove('pending');
+      if (!underBar) return;
+      setTimeout(() => {
+        li.dataset.cover = 'opening';
+        positionCards();
+        setTimeout(() => { delete li.dataset.cover; li.style.clipPath = ''; }, T_SLIDE + 50);
+      }, SLIDE_LAG);
+    }, delay);
+  }
+
+  /** Size cards to fit inside the bars, and stack them upward from the active seat. */
+  function positionCards() {
+    if (!lastLayout || mode !== 'play' || !current) return;
+    const L = lastLayout;
+    const n = puzzle().clues.length;
+    const cards = [...stackEl.children];
+    // The card in the active seat is sized to fit inside the bar (for a two-line
+    // clue; anything taller stays hidden under the bar by its clip). Earlier clues
+    // are plain lines: out to the circle beside it, full width above it.
+    const fit = Chart.fitCard(L, TWO_LINE_CARD_H, n);
+    const hubR = Chart.R_HUB * L.s;
+    const besideHubW = Math.max(fit.width, L.cx - hubR - 28 - fit.left);
+    const fullW = Math.max(besideHubW, window.innerWidth - 20 - fit.left);
+    const hubTop = L.cy - hubR - 8;
+    cards.forEach(li => {
+      li.style.top = `${L.cy}px`;
+      li.style.left = `${fit.left}px`;
+    });
+    if (!cards.length) return;
+
+    // Newest card centered on the seat; earlier ones stacked above, clear of the
+    // bar's full thickness so the bar never covers them.
+    // (While bars spin in, the current clue isn't shown yet: just leave its space.)
+    const latest = cards[cards.length - 1];
+    const hasLatest = latest.classList.contains('latest');
+    let latestH = TWO_LINE_CARD_H;
+    if (hasLatest) {
+      latest.style.width = `${fit.width}px`;
+      latest.style.setProperty('--off', '0px');
+      latestH = latest.offsetHeight;
+    }
+    let edge = Math.max(Chart.barHalfAt(L, fit.left, n), latestH / 2) + 14;
+    for (let i = cards.length - (hasLatest ? 2 : 1); i >= 0; i--) {
+      const li = cards[i];
+      li.style.width = `${besideHubW}px`;
+      // If this line sits entirely above the circle, let it run full width.
+      if (L.cy - edge - li.offsetHeight < hubTop) {
+        li.style.width = `${fullW}px`;
+        if (L.cy - edge - li.offsetHeight >= hubTop) li.style.width = `${besideHubW}px`;
+      }
+      const h = li.offsetHeight;
+      li.style.setProperty('--off', `${edge + h / 2}px`);
+      edge += h + 4;
+    }
+
+    cards.forEach(li => {
+      const box = { left: fit.left, width: li.offsetWidth, height: li.offsetHeight };
+      if (li.dataset.cover === 'on') li.style.clipPath = Chart.barClip(L, box, n, 0);
+      else if (li.dataset.cover === 'opening') li.style.clipPath = Chart.barClip(L, box, n, 1);
+    });
+  }
+
+  /* ---------- Panel ---------------------------------------------------- */
+  function renderPanel() {
+    if (!current) return;
     const p = puzzle();
     const g = game();
     const over = g.status !== 'playing';
-
-    $('round-title').textContent = `${roundLabel(current)} round`;
-    $('clue-counter').textContent = over
-      ? (g.status === 'won' ? `Solved on clue ${g.revealed}/${p.clues.length}` : `Not solved · ${p.clues.length} clues`)
-      : `Clue ${g.revealed} of ${p.clues.length}`;
-
-    renderClues();
     $('play-area').hidden = over;
     $('skip-btn').querySelector('.hold-text').textContent = g.revealed < p.clues.length ? 'Skip to next clue' : 'Skip (ends round)';
     renderResult();
-    search.refresh();
-    lastShownRevealed[current] = g.revealed;
+  }
+
+  function renderResult() {
+    const el = $('result');
+    const g = game();
+    if (g.status === 'playing') { el.hidden = true; el.innerHTML = ''; return; }
+    const s = BY_ID.get(puzzle().answer);
+    const won = g.status === 'won';
+    const parties = s.party.map(code => (CFG.parties[code] ? CFG.parties[code].name : code)).join(' → ');
+    const next = rounds.find(r => r.key !== current && games[r.key].status === 'playing');
+    el.className = `result ${won ? 'won' : 'lost'}`;
+    el.innerHTML = `
+      <p class="result-head">${won
+        ? `🎉 You got it on clue <strong>${g.revealed}</strong> of ${puzzle().clues.length}!`
+        : 'Better luck next time. The answer was:'}</p>
+      <div class="answer-card">
+        <img class="answer-photo" src="${escapeHtml(photoUrl(s))}" alt="Photo of ${escapeHtml(s.name)}">
+        <div class="answer-info">
+          <div class="answer-name">${escapeHtml(s.name)}</div>
+          <div class="answer-meta">
+            <span class="party party-${escapeHtml(s.party[s.party.length - 1])}">${escapeHtml(parties)}</span>
+            <span class="dot">·</span><span>${escapeHtml(CFG.states[s.state] || s.state)}</span>
+            <span class="dot">·</span><span>${escapeHtml(yearsLabel(s))}</span>
+          </div>
+          ${s.wiki ? `<a class="answer-link" href="${escapeHtml(s.wiki)}" target="_blank" rel="noopener">Read more ↗</a>` : ''}
+        </div>
+      </div>
+      <div class="result-actions">
+        <button class="btn primary" data-action="share">Share</button>
+        ${next ? `<button class="btn" data-action="next" data-round="${next.key}">Play ${escapeHtml(next.label)} →</button>` : ''}
+      </div>`;
+    el.hidden = false;
+  }
+
+  /* ---------- Render & layout ------------------------------------------ */
+  let switchCardDelay = 0; // after a round switch, clues appear once the bars have spun in
+
+  function render() {
+    document.body.classList.toggle('round-hard', mode === 'play' && current === 'hard');
+    renderTabs();
+    const revealDelay = renderChart();
+    renderHub();
+    // A clue is uncovered by its bar only when that bar is wiping away right now.
+    renderStack(revealDelay >= 0 ? revealDelay : switchCardDelay, revealDelay >= 0);
+    switchCardDelay = 0;
+    renderPanel();
+    if (current) search.refresh();
+    layout();
   }
 
   function renderTabs() {
@@ -199,72 +500,43 @@
     });
   }
 
-  function guessLine(guess, answerId) {
-    if (!guess.id) return '<li class="g skip">Skipped</li>';
-    const s = BY_ID.get(guess.id);
-    const name = s ? escapeHtml(s.name) : escapeHtml(guess.id);
-    return guess.id === answerId
-      ? `<li class="g right"><span aria-hidden="true">✓</span> ${name}</li>`
-      : `<li class="g wrong"><span aria-hidden="true">✗</span> ${name}</li>`;
+  let lastLayout = null;
+  function layout() {
+    const W = window.innerWidth, H = window.innerHeight;
+    const top = document.querySelector('.topbar').offsetHeight;
+    const wide = W >= 860;
+    document.body.classList.toggle('wide', wide);
+    const panel = $('panel');
+    let L;
+    if (mode === 'title') {
+      L = Chart.layout('title', W, H, { slot: $('chart-slot').getBoundingClientRect() });
+    } else {
+      const panelW = wide ? Math.round(Math.min(380, Math.max(290, W * 0.26))) : W;
+      panel.style.width = wide ? `${panelW}px` : '';
+      L = Chart.layout('play', W, H, {
+        wide, top, panelRight: 24 + panelW, panelHeight: wide ? 0 : panel.offsetHeight,
+      });
+      if (wide) {
+        const ph = panel.offsetHeight;
+        panel.style.top = `${Math.max(top + 16, Math.min(L.cy - ph / 2, H - ph - 16))}px`;
+      } else {
+        panel.style.top = '';
+      }
+    }
+    const gb = $('guess-btn');
+    panel.style.setProperty('--guess-btn-w', `${gb.offsetWidth + 8}px`);
+    $('chart').style.transform = `translate(${L.cx}px, ${L.cy}px) scale(${L.s})`;
+    stackEl.style.setProperty('--fade-top', `${top}px`);
+    lastLayout = L;
+    positionCards();
   }
 
-  function renderClues() {
-    const p = puzzle();
-    const g = game();
-    const over = g.status !== 'playing';
-    const prev = lastShownRevealed[current];
-    const html = p.clues.map((c, i) => {
-      const n = i + 1;
-      if (n <= g.revealed) {
-        const guesses = g.guesses.filter(x => x.clue === n).map(x => guessLine(x, p.answer)).join('');
-        const fresh = n === g.revealed && n > prev ? ' fresh' : '';
-        return `<li class="clue revealed${fresh}">
-          <span class="num">${n}</span>
-          <div class="body"><p class="text">${escapeHtml(c.text)}</p>${guesses ? `<ul class="clue-guesses">${guesses}</ul>` : ''}</div>
-        </li>`;
-      }
-      if (over) {
-        return `<li class="clue unrevealed">
-          <span class="num">${n}</span>
-          <div class="body"><p class="text">${escapeHtml(c.text)}</p></div>
-        </li>`;
-      }
-      return `<li class="clue locked" aria-label="Clue ${n}, locked">
-        <span class="num">${n}</span>
-        <div class="body"><p class="text">${c.category ? escapeHtml(c.category) : 'Locked'}</p></div>
-      </li>`;
-    }).join('');
-    $('clues').innerHTML = html;
-  }
-
-  function renderResult() {
-    const el = $('result');
-    const g = game();
-    if (g.status === 'playing') { el.hidden = true; el.innerHTML = ''; return; }
-    const s = BY_ID.get(puzzle().answer);
-    const won = g.status === 'won';
-    const parties = s.party.map(code => (CFG.parties[code] ? CFG.parties[code].name : code)).join(' → ');
-    const next = rounds.find(r => r.key !== current && games[r.key].status === 'playing');
-    el.className = `result ${won ? 'won' : 'lost'}`;
-    el.innerHTML = `
-      <p class="result-head">${won
-        ? `🎉 You got it on clue <strong>${g.revealed}</strong> of ${puzzle().clues.length}!`
-        : 'Better luck next time. The answer was:'}</p>
-      <div class="answer-card">
-        <img class="answer-photo" src="${escapeHtml(photoUrl(s))}" alt="Photo of ${escapeHtml(s.name)}">
-        <div class="answer-name">${escapeHtml(s.name)}</div>
-        <div class="answer-meta">
-          <span class="party party-${escapeHtml(s.party[s.party.length - 1])}">${escapeHtml(parties)}</span>
-          <span class="dot">·</span><span>${escapeHtml(CFG.states[s.state] || s.state)}</span>
-          <span class="dot">·</span><span>${escapeHtml(yearsLabel(s))}</span>
-        </div>
-        ${s.wiki ? `<a class="answer-link" href="${escapeHtml(s.wiki)}" target="_blank" rel="noopener">Read more ↗</a>` : ''}
-      </div>
-      <div class="result-actions">
-        <button class="btn primary" data-action="share">Share</button>
-        ${next ? `<button class="btn" data-action="next" data-round="${next.key}">Play ${escapeHtml(next.label)} round →</button>` : ''}
-      </div>`;
-    el.hidden = false;
+  let resizeTimer;
+  function onResize() {
+    document.body.classList.add('no-anim');
+    layout();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => document.body.classList.remove('no-anim'), 100);
   }
 
   /* ---------- Share ---------------------------------------------------- */
@@ -339,20 +611,17 @@
 
   /* ---------- Press-and-hold buttons ---------------------------------- */
   // `action` runs only after the button has been held for CFG.holdDuration ms
-  // (mouse, touch, or Space/Enter). A quick tap shows a hint instead.
+  // (mouse, touch, or Space/Enter). A quick tap does nothing.
   function holdToActivate(btn, action) {
     const duration = CFG.holdDuration;
     btn.style.setProperty('--hold-ms', `${duration}ms`);
     let timer = null;
-    let fired = false;
 
     function start() {
       if (timer) return;
-      fired = false;
       btn.classList.add('holding');
       timer = setTimeout(() => {
         timer = null;
-        fired = true;
         btn.classList.remove('holding');
         action();
       }, duration);
@@ -376,11 +645,7 @@
     btn.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') cancel(); });
     btn.addEventListener('blur', cancel);
     btn.addEventListener('contextmenu', e => e.preventDefault()); // stop long-press menus on mobile
-    btn.addEventListener('click', e => {
-      e.preventDefault();
-      if (!fired && e.detail !== 0) toast(btn.dataset.holdLabel || 'Press and hold');
-      fired = false;
-    });
+    btn.addEventListener('click', e => e.preventDefault());
   }
 
   /* ---------- Toast & countdown --------------------------------------- */
@@ -399,15 +664,28 @@
     const ms = midnight - now;
     if (ms <= 1000 && IS_TODAY && !requested) { setTimeout(() => location.reload(), 1500); }
     const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, sec = Math.floor(ms / 1000) % 60;
-    $('countdown').textContent = `${pad(h)}:${pad(m)}:${pad(sec)}`;
+    const text = `${pad(h)}:${pad(m)}:${pad(sec)}`;
+    $('countdown').textContent = text;
+    const tc = $('title-countdown');
+    if (tc) tc.textContent = text;
   }
 
   /* ---------- Boot ----------------------------------------------------- */
   function boot() {
     validateData();
-    const dateLabel = parseISO(DATE).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    $('meta').textContent = `#${PUZZLE_NO} · ${dateLabel}${IS_TODAY ? '' : ' · Archive'}`;
 
+    const playBtn = $('play-btn');
+    if (rounds.length) {
+      playBtn.textContent = `Play ${shortDate(DATE)}`;
+      $('meta').innerHTML = `Puzzle #${PUZZLE_NO}${IS_TODAY ? '' : ' · Archive'} · Next puzzle in <strong id="title-countdown">--:--:--</strong>`;
+    } else {
+      playBtn.textContent = 'No puzzle today';
+      playBtn.disabled = true;
+      $('meta').innerHTML = `Check back tomorrow · Next puzzle in <strong id="title-countdown">--:--:--</strong>`;
+    }
+
+    playBtn.addEventListener('click', () => { if (rounds.length) setMode('play'); });
+    $('home-btn').addEventListener('click', () => setMode('title'));
     document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => switchRound(btn.dataset.round)));
     $('guess-form').addEventListener('submit', e => { e.preventDefault(); submitGuess(); });
     holdToActivate($('skip-btn'), skip);
@@ -425,16 +703,15 @@
       b.addEventListener('click', () => { statsRound = b.dataset.statsRound; renderStats(); }));
     // Clicking the backdrop closes a dialog.
     document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
+    window.addEventListener('resize', onResize);
 
     tickCountdown();
     setInterval(tickCountdown, 1000);
 
-    if (!rounds.length) {
-      $('no-puzzle').hidden = false;
-    } else {
-      $('game').hidden = false;
-      render();
-    }
+    document.body.classList.add('no-anim');
+    render();
+    setTimeout(() => document.body.classList.remove('no-anim'), 60);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
 
     if (!Store.getFlag('seenHelp')) {
       Store.setFlag('seenHelp');

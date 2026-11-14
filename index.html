@@ -2,77 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Senatordle</title>
   <meta name="description" content="Senatordle — the daily U.S. senator guessing game.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="mode-title">
+  <!-- The Senate seating chart. Fills the screen behind everything else;
+       js/chart.js draws it and js/app.js moves it between screens. -->
+  <div id="stage" class="stage" aria-hidden="true">
+    <div id="chart" class="chart">
+      <svg id="chart-svg" viewBox="-800 -800 1600 1600" width="1600" height="1600">
+        <g id="seats" class="seats"></g>
+        <circle class="hub" r="150"></circle>
+      </svg>
+      <div id="hub-label" class="hub-label"></div>
+    </div>
+  </div>
+
+  <!-- Clues revealed from the seating bars, stacked upward. -->
+  <ol id="clue-stack" class="clue-stack" aria-label="Clues" aria-live="polite"></ol>
+
+  <!-- Top bar -->
   <header class="topbar">
-    <button class="icon-btn" id="help-btn" aria-label="How to play" title="How to play">?</button>
-    <h1 class="logo">Senator<span>dle</span></h1>
-    <button class="icon-btn" id="stats-btn" aria-label="Statistics" title="Statistics">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 20h3V10H4v10zm6.5 0h3V4h-3v16zM17 20h3v-7h-3v7z"/></svg>
-    </button>
+    <button class="mini-logo" id="home-btn" title="Back to start">Senator<span>dle</span></button>
+    <nav class="tabs" role="tablist" aria-label="Rounds">
+      <button class="tab" role="tab" data-round="normal" id="tab-normal">Normal <span class="tab-status" data-status-for="normal"></span></button>
+      <button class="tab" role="tab" data-round="hard" id="tab-hard">Hard <span class="tab-status" data-status-for="hard"></span></button>
+    </nav>
+    <div class="topbar-right">
+      <button class="icon-btn" id="help-btn" aria-label="How to play" title="How to play">?</button>
+      <button class="icon-btn" id="stats-btn" aria-label="Statistics" title="Statistics">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 20h3V10H4v10zm6.5 0h3V4h-3v16zM17 20h3v-7h-3v7z"/></svg>
+      </button>
+    </div>
   </header>
 
-  <main class="container">
-    <p class="meta" id="meta"></p>
-
-    <section id="no-puzzle" class="card empty" hidden>
-      <h2>No puzzle today</h2>
-      <p>There's no Senatordle scheduled for this date yet. Check back tomorrow!</p>
-    </section>
-
-    <div id="game" hidden>
-      <nav class="tabs" role="tablist" aria-label="Rounds">
-        <button class="tab" role="tab" data-round="normal" id="tab-normal" aria-controls="round-panel">
-          Normal <span class="tab-status" data-status-for="normal"></span>
-        </button>
-        <button class="tab" role="tab" data-round="hard" id="tab-hard" aria-controls="round-panel">
-          Hard <span class="tab-status" data-status-for="hard"></span>
-        </button>
-      </nav>
-
-      <section id="round-panel" role="tabpanel" class="card">
-        <div class="round-head">
-          <h2 id="round-title"></h2>
-          <span class="clue-counter" id="clue-counter"></span>
-        </div>
-
-        <ol class="clues" id="clues"></ol>
-
-        <div id="play-area">
-          <form class="guess-form" id="guess-form" autocomplete="off">
-            <div class="combo">
-              <img id="guess-photo" class="guess-photo" src="images/Generic_Image.png" alt="" hidden>
-              <input id="guess-input" type="text" role="combobox"
-                     aria-autocomplete="list" aria-expanded="false" aria-controls="guess-list"
-                     placeholder="Search for a senator…" spellcheck="false">
-              <ul id="guess-list" class="results" role="listbox" hidden></ul>
-            </div>
-            <button type="submit" class="btn primary" id="guess-btn" disabled>Guess</button>
-          </form>
-
-          <div class="actions">
-            <button type="button" class="btn hold" id="skip-btn" data-hold-label="Hold to skip">
-              <span class="hold-fill" aria-hidden="true"></span><span class="hold-text">Skip to next clue</span>
-            </button>
-            <button type="button" class="btn hold danger" id="giveup-btn" data-hold-label="Hold to give up">
-              <span class="hold-fill" aria-hidden="true"></span><span class="hold-text">Give up</span>
-            </button>
-          </div>
-        </div>
-
-        <div id="result" class="result" hidden></div>
-      </section>
+  <!-- Title screen -->
+  <section id="title-screen" class="title-screen">
+    <div class="title-head">
+      <h1 class="logo">Senator<span>dle</span></h1>
+      <p class="tagline">The daily U.S. senator guessing game</p>
     </div>
-  </main>
+    <div id="chart-slot" class="chart-slot"></div>
+    <div class="title-foot">
+      <button class="btn play-btn" id="play-btn">Play</button>
+      <p class="meta" id="meta"></p>
+    </div>
+  </section>
 
-  <footer class="footer">
-    <span>Next puzzle in <strong id="countdown">--:--:--</strong></span>
-  </footer>
+  <!-- Guess panel (left side on desktop, bottom on phones) -->
+  <aside id="panel" class="panel">
+    <div id="play-area">
+      <h2 class="panel-title">Who is this senator?</h2>
+      <form class="guess-form" id="guess-form" autocomplete="off">
+        <div class="combo">
+          <img id="guess-photo" class="guess-photo" src="images/Generic_Image.png" alt="" hidden>
+          <input id="guess-input" type="text" role="combobox"
+                 aria-autocomplete="list" aria-expanded="false" aria-controls="guess-list"
+                 placeholder="Search for a senator…" spellcheck="false">
+          <ul id="guess-list" class="results" role="listbox" hidden></ul>
+        </div>
+        <button type="submit" class="btn primary" id="guess-btn" disabled>Guess</button>
+      </form>
+      <div class="actions">
+        <button type="button" class="btn hold" id="skip-btn">
+          <span class="hold-fill" aria-hidden="true"></span><span class="hold-text">Skip to next clue</span>
+        </button>
+        <button type="button" class="btn hold danger" id="giveup-btn">
+          <span class="hold-fill" aria-hidden="true"></span><span class="hold-text">Give up</span>
+        </button>
+      </div>
+    </div>
+    <div id="result" class="result" hidden></div>
+  </aside>
 
   <!-- How to play -->
   <dialog id="help-dialog" class="modal">
@@ -83,7 +90,7 @@
       <li><strong>Normal</strong>: a well-known senator.</li>
       <li><strong>Hard</strong>: a lesser-known senator.</li>
     </ul>
-    <p>You start with one clue. Each clue is more specific than the last. After every clue you can:</p>
+    <p>Each seat in the chamber hides a clue, and each clue is more specific than the last. After every clue you can:</p>
     <ul>
       <li><strong>Guess</strong>: search the database by name. Results show each senator's party and state, e.g. <em>(D-GA)</em>. A wrong guess reveals the next clue.</li>
       <li><strong>Skip</strong>: press and hold to reveal the next clue without guessing.</li>
@@ -103,16 +110,17 @@
     </div>
     <div id="stats-body"></div>
     <button class="btn primary share-btn" id="stats-share-btn">Share today's results</button>
+    <p class="muted countdown-line">Next puzzle in <strong id="countdown">--:--:--</strong></p>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- Data first, then app -->
   <script src="js/config.js"></script>
   <script src="data/senators.js"></script>
   <script src="data/puzzles.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/search.js"></script>
+  <script src="js/chart.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
