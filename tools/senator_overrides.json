@@ -1,0 +1,5 @@
+{
+  "_comment": "Manual fixes applied after fetching. Key = Wikidata QID (see the `qid` field in data/senators.js). Any field can be overridden, e.g. {\"Q2036942\": {\"aliases\": [\"Rafael Cruz\"]}}.",
+
+  "Q538868": { "_why": "Wikidata has no record of Manchin leaving the Democrats in May 2024.", "party": ["D", "I"] }
+}

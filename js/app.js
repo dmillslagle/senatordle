@@ -9,7 +9,7 @@
   const SENATORS = window.SENATORS || [];
   const PUZZLES = window.PUZZLES || {};
   const BY_ID = new Map(SENATORS.map(s => [s.id, s]));
-  const { partyLabel, yearsLabel, escapeHtml } = window.SenatorSearch;
+  const { yearsLabel, photoUrl, escapeHtml } = window.SenatorSearch;
   const $ = id => document.getElementById(id);
 
   /* ---------- Dates ---------------------------------------------------- */
@@ -74,14 +74,16 @@
   const game = () => games[current];
   const roundLabel = key => (CFG.rounds.find(r => r.key === key) || {}).label || key;
 
-  /** Which search attributes are hidden for a round right now. */
+  /**
+   * Which attributes search results should leave out for a round right now.
+   * Once a revealed clue gives away the party or state, results stop showing it.
+   */
   function hiddenAttrs(key) {
     const g = games[key];
     const out = { state: false, party: false };
-    if (!g || g.status !== 'playing') return out;
+    if (!g) return out;
     ['state', 'party'].forEach(attr => {
-      const idx = puzzles[key].clues.findIndex(c => c.reveals.includes(attr));
-      out[attr] = idx >= 0 && idx >= g.revealed;
+      out[attr] = puzzles[key].clues.slice(0, g.revealed).some(c => c.reveals.includes(attr));
     });
     return out;
   }
@@ -91,10 +93,7 @@
     senators: SENATORS,
     input: $('guess-input'),
     list: $('guess-list'),
-    stateSelect: $('filter-state'),
-    partySelect: $('filter-party'),
-    stateWrap: $('filter-state-wrap'),
-    partyWrap: $('filter-party-wrap'),
+    photo: $('guess-photo'),
     getHidden: () => (current ? hiddenAttrs(current) : { state: false, party: false }),
     isGuessed: id => !!current && game().guesses.some(g => g.id === id),
     onSelect: s => { $('guess-btn').disabled = !s; },
@@ -127,7 +126,6 @@
 
   function giveUp() {
     if (game().status !== 'playing') return;
-    if (!confirm('Give up and reveal the answer?')) return;
     finish('lost');
   }
 
@@ -157,7 +155,6 @@
   function switchRound(key) {
     if (!puzzles[key] || key === current) return;
     current = key;
-    search.resetFilters();
     search.reset();
     render();
   }
@@ -176,7 +173,7 @@
 
     renderClues();
     $('play-area').hidden = over;
-    $('skip-btn').textContent = g.revealed < p.clues.length ? 'Skip to next clue' : 'Skip (ends round)';
+    $('skip-btn').querySelector('.hold-text').textContent = g.revealed < p.clues.length ? 'Skip to next clue' : 'Skip (ends round)';
     renderResult();
     search.refresh();
     lastShownRevealed[current] = g.revealed;
@@ -254,6 +251,7 @@
         ? `🎉 You got it on clue <strong>${g.revealed}</strong> of ${puzzle().clues.length}!`
         : 'Better luck next time. The answer was:'}</p>
       <div class="answer-card">
+        <img class="answer-photo" src="${escapeHtml(photoUrl(s))}" alt="Photo of ${escapeHtml(s.name)}">
         <div class="answer-name">${escapeHtml(s.name)}</div>
         <div class="answer-meta">
           <span class="party party-${escapeHtml(s.party[s.party.length - 1])}">${escapeHtml(parties)}</span>
@@ -339,6 +337,52 @@
     $('stats-dialog').showModal();
   }
 
+  /* ---------- Press-and-hold buttons ---------------------------------- */
+  // `action` runs only after the button has been held for CFG.holdDuration ms
+  // (mouse, touch, or Space/Enter). A quick tap shows a hint instead.
+  function holdToActivate(btn, action) {
+    const duration = CFG.holdDuration;
+    btn.style.setProperty('--hold-ms', `${duration}ms`);
+    let timer = null;
+    let fired = false;
+
+    function start() {
+      if (timer) return;
+      fired = false;
+      btn.classList.add('holding');
+      timer = setTimeout(() => {
+        timer = null;
+        fired = true;
+        btn.classList.remove('holding');
+        action();
+      }, duration);
+    }
+    function cancel() {
+      if (!timer) return;
+      clearTimeout(timer);
+      timer = null;
+      btn.classList.remove('holding');
+    }
+
+    btn.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      try { btn.setPointerCapture(e.pointerId); } catch (err) { /* not capturable: ignore */ }
+      start();
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => btn.addEventListener(ev, cancel));
+    btn.addEventListener('keydown', e => {
+      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); start(); }
+    });
+    btn.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') cancel(); });
+    btn.addEventListener('blur', cancel);
+    btn.addEventListener('contextmenu', e => e.preventDefault()); // stop long-press menus on mobile
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      if (!fired && e.detail !== 0) toast(btn.dataset.holdLabel || 'Press and hold');
+      fired = false;
+    });
+  }
+
   /* ---------- Toast & countdown --------------------------------------- */
   let toastTimer;
   function toast(msg) {
@@ -366,8 +410,8 @@
 
     document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => switchRound(btn.dataset.round)));
     $('guess-form').addEventListener('submit', e => { e.preventDefault(); submitGuess(); });
-    $('skip-btn').addEventListener('click', skip);
-    $('giveup-btn').addEventListener('click', giveUp);
+    holdToActivate($('skip-btn'), skip);
+    holdToActivate($('giveup-btn'), giveUp);
     $('result').addEventListener('click', e => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;

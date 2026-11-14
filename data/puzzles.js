@@ -7,8 +7,9 @@
  *   clues   Listed from vaguest to most specific. Each clue is either:
  *             - a plain string, or
  *             - an object: { text, reveals?, category? }
- *               reveals:  ["state"] and/or ["party"]. The matching search filter
- *                         stays hidden until the player reaches this clue.
+ *               reveals:  ["state"] and/or ["party"]. Once the player reaches
+ *                         this clue, search results stop showing that fact
+ *                         ("(D-GA)" becomes "(GA)" or "(D)").
  *               category: optional short label (e.g. "Previous Job"), kept for
  *                         the planned "chosen hints" feature.
  *
@@ -17,7 +18,7 @@
 window.PUZZLES = {
   '2026-11-14': {
     normal: {
-      answer: 'cruz-ted',
+      answer: 'ted-cruz',
       clues: [
         'This senator is a man.',
         'This senator graduated from an Ivy League school.',
@@ -32,7 +33,7 @@ window.PUZZLES = {
       ],
     },
     hard: {
-      answer: 'blackburn-marsha',
+      answer: 'marsha-blackburn',
       clues: [
         'This senator was born and educated in Mississippi.',
         'This senator served as a U.S. representative before becoming a senator.',
@@ -50,7 +51,7 @@ window.PUZZLES = {
 
   '2026-11-15': {
     normal: {
-      answer: 'sanders-bernie',
+      answer: 'bernie-sanders',
       clues: [
         'This senator served as a mayor before being elected.',
         'This senator is currently serving.',
@@ -65,7 +66,7 @@ window.PUZZLES = {
       ],
     },
     hard: {
-      answer: 'ossoff-jon',
+      answer: 'jon-ossoff',
       clues: [
         'This senator is the senator for their birth state.',
         'This senator does not go by their legal first name.',

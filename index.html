@@ -44,19 +44,9 @@
         <ol class="clues" id="clues"></ol>
 
         <div id="play-area">
-          <div class="filters" id="filters">
-            <label class="filter" id="filter-state-wrap">
-              <span class="sr-only">Filter by state</span>
-              <select id="filter-state"><option value="">All states</option></select>
-            </label>
-            <label class="filter" id="filter-party-wrap">
-              <span class="sr-only">Filter by party</span>
-              <select id="filter-party"><option value="">All parties</option></select>
-            </label>
-          </div>
-
           <form class="guess-form" id="guess-form" autocomplete="off">
             <div class="combo">
+              <img id="guess-photo" class="guess-photo" src="images/Generic_Image.png" alt="" hidden>
               <input id="guess-input" type="text" role="combobox"
                      aria-autocomplete="list" aria-expanded="false" aria-controls="guess-list"
                      placeholder="Search for a senator…" spellcheck="false">
@@ -66,8 +56,12 @@
           </form>
 
           <div class="actions">
-            <button type="button" class="btn ghost" id="skip-btn">Skip to next clue</button>
-            <button type="button" class="btn ghost danger" id="giveup-btn">Give up</button>
+            <button type="button" class="btn hold" id="skip-btn" data-hold-label="Hold to skip">
+              <span class="hold-fill" aria-hidden="true"></span><span class="hold-text">Skip to next clue</span>
+            </button>
+            <button type="button" class="btn hold danger" id="giveup-btn" data-hold-label="Hold to give up">
+              <span class="hold-fill" aria-hidden="true"></span><span class="hold-text">Give up</span>
+            </button>
           </div>
         </div>
 
@@ -91,11 +85,11 @@
     </ul>
     <p>You start with one clue. Each clue is more specific than the last. After every clue you can:</p>
     <ul>
-      <li><strong>Guess</strong>: search the database by name, and filter by state or party. A wrong guess reveals the next clue.</li>
-      <li><strong>Skip</strong>: reveal the next clue without guessing.</li>
+      <li><strong>Guess</strong>: search the database by name. Results show each senator's party and state, e.g. <em>(D-GA)</em>. A wrong guess reveals the next clue.</li>
+      <li><strong>Skip</strong>: press and hold to reveal the next clue without guessing.</li>
     </ul>
-    <p>The fewer clues you need, the better. A wrong guess after the final clue ends the round.</p>
-    <p class="muted">If a clue in today's puzzle gives away the senator's state or party, that filter stays hidden until you reach the clue.</p>
+    <p>The fewer clues you need, the better. A wrong guess after the final clue ends the round. Press and hold <strong>Give up</strong> to see the answer.</p>
+    <p class="muted">Once a clue gives away the senator's party or state, search results stop showing it.</p>
     <p class="muted">A new puzzle comes out every day at midnight, your local time.</p>
   </dialog>
 

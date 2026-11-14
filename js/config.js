@@ -12,6 +12,12 @@ window.SENATORDLE_CONFIG = {
   // Max results shown in the search dropdown.
   maxResults: 40,
 
+  // Used for any senator without an `image` in data/senators.js.
+  placeholderImage: 'images/Generic_Image.png',
+
+  // How long (ms) "Skip" and "Give up" must be held down.
+  holdDuration: 800,
+
   // Party codes used in data/senators.js. Anything missing here is shown as-is.
   parties: {
     D: { name: 'Democratic', short: 'D' },
