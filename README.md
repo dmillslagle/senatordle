@@ -7,7 +7,7 @@ The daily U.S. senator guessing game. Each day has two rounds, **Normal** and **
 It's a static site with no build step and no dependencies.
 
 - **Locally:** open `index.html` in a browser, or serve the folder (`python -m http.server`) and go to `http://localhost:8000`.
-- **Hosting:** GitHub Pages works as-is. Settings → Pages → deploy from `main`, root folder.
+- **Hosting:** the site is hosted on GitHub Pages (see [Deploying](#deploying)).
 
 ## Project layout
 
@@ -81,3 +81,21 @@ When the page loads it checks the data and prints problems to the browser consol
 - Your score is the clue number you solved it on.
 - Progress and stats are saved in localStorage. Stats and streaks are kept separately for each round, and only today's puzzle counts toward them.
 - `?date=YYYY-MM-DD` plays a past puzzle (archive). It doesn't count toward stats, and future dates aren't allowed.
+
+## Deploying
+
+The site is served by GitHub Pages straight from the `main` branch. There's no build step.
+
+1. The repository must be public (required for Pages on a free account).
+2. On GitHub: **Settings → Pages → Build and deployment → Source: Deploy from a branch**, then choose `main` and `/ (root)` and save.
+3. After a minute the site is live at `https://dmillslagle.github.io/senatordle/`. Every push to `main` redeploys it.
+
+`.nojekyll` (an empty file) tells Pages to serve the files as-is instead of running them through Jekyll.
+
+To use a custom domain, add it under **Settings → Pages → Custom domain** and follow GitHub's DNS instructions. HTTPS is set up automatically.
+
+Puzzle answers ship to the browser in `data/puzzles.js`, and in a public repo every committed puzzle is visible. Consider pushing puzzles only a few days ahead.
+
+## Credits
+
+Senator data comes from Wikidata (CC0). Photos come from Wikipedia and Wikimedia Commons under their own licenses; the in-game **Credits** window (title screen, or the How to play window) links each photo to its file page, which shows its author and license. Fonts: Cinzel and EB Garamond (SIL Open Font License).

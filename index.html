@@ -35,6 +35,12 @@
       <button class="tab" role="tab" data-round="hard" id="tab-hard">Hard <span class="tab-status" data-status-for="hard"></span></button>
     </nav>
     <div class="topbar-right">
+      <a class="icon-btn extra-link" href="https://github.com/dmillslagle/senatordle" target="_blank" rel="noopener" aria-label="Source code on GitHub" title="Source code on GitHub">
+        <svg viewBox="0 0 16 16" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <a class="icon-btn extra-link" href="mailto:dmillslagledev@gmail.com?subject=Senatordle" aria-label="Contact" title="Contact">
+        <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3 5.5h18v13H3z M3.5 6l8.5 7 8.5-7"/></svg>
+      </a>
       <button class="icon-btn" id="help-btn" aria-label="How to play" title="How to play">?</button>
       <button class="icon-btn" id="stats-btn" aria-label="Statistics" title="Statistics">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 20h3V10H4v10zm6.5 0h3V4h-3v16zM17 20h3v-7h-3v7z"/></svg>
@@ -81,6 +87,9 @@
     <div id="result" class="result" hidden></div>
   </aside>
 
+  <!-- Countdown shown during play (bottom left) -->
+  <p class="play-countdown" aria-live="off">Next puzzle in <strong id="play-countdown">--:--:--</strong></p>
+
   <!-- How to play -->
   <dialog id="help-dialog" class="modal">
     <form method="dialog"><button class="icon-btn close" aria-label="Close">×</button></form>
@@ -98,6 +107,23 @@
     <p>The fewer clues you need, the better. A wrong guess after the final clue ends the round. Press and hold <strong>Give up</strong> to see the answer.</p>
     <p class="muted">Once a clue gives away the senator's party or state, search results stop showing it.</p>
     <p class="muted">A new puzzle comes out every day at midnight, your local time.</p>
+    <p class="muted"><button class="link-btn" data-open-credits>Photo and data credits</button></p>
+  </dialog>
+
+  <!-- Credits -->
+  <dialog id="credits-dialog" class="modal modal-wide">
+    <form method="dialog"><button class="icon-btn close" aria-label="Close">×</button></form>
+    <h2>Credits</h2>
+    <p><strong>Senator data</strong>: names, states, parties and terms come from
+      <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, released under CC0.</p>
+    <p><strong>Senator photos</strong>: from Wikipedia and Wikimedia Commons. Most official portraits are in the
+      public domain; the rest are used under their own licenses (often CC BY-SA). Each link below opens the photo's
+      file page, which names its author and license.</p>
+    <p><strong>Fonts</strong>: <a href="https://fonts.google.com/specimen/Cinzel" target="_blank" rel="noopener">Cinzel</a> and
+      <a href="https://fonts.google.com/specimen/EB+Garamond" target="_blank" rel="noopener">EB Garamond</a>, under the SIL Open Font License.</p>
+    <h3>Photo sources</h3>
+    <input type="search" id="credits-filter" class="credits-filter" placeholder="Filter by senator…" aria-label="Filter photo credits by senator">
+    <ul id="credits-list" class="credits-list"></ul>
   </dialog>
 
   <!-- Statistics -->

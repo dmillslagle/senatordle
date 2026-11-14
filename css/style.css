@@ -172,6 +172,12 @@ button, input, select { font: inherit; color: inherit; }
   display: grid; place-items: center; cursor: pointer; font-weight: 700; font-size: 1.05rem;
 }
 .icon-btn:hover { background: var(--surface-2); }
+a.icon-btn { color: var(--text); text-decoration: none; }
+/* Plain text-style button (e.g. "Credits" links). */
+.link-btn {
+  border: none; background: none; padding: 0; cursor: pointer;
+  color: var(--accent); text-decoration: underline; text-underline-offset: 2px; font: inherit;
+}
 .mini-logo, .tabs { transition: opacity .4s ease .5s, transform .4s ease .5s; }
 .mode-title .mini-logo, .mode-title .tabs { opacity: 0; transform: translateY(-8px); pointer-events: none; transition-delay: 0s; }
 
@@ -202,7 +208,22 @@ button, input, select { font: inherit; color: inherit; }
 .btn.play-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(178, 34, 52, .4); }
 .btn.play-btn:disabled { background: var(--muted); box-shadow: none; cursor: default; }
 .meta { margin: 12px 0 0; color: var(--muted); font-size: .9rem; }
+.meta .link-btn { pointer-events: auto; color: inherit; }
 .meta strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* ===== Play-screen countdown (bottom left) ===== */
+.play-countdown {
+  position: fixed; left: 24px; bottom: calc(16px + var(--panel-h, 0px)); z-index: 4; margin: 0;
+  color: var(--muted); font-size: .9rem; pointer-events: none;
+  transition: opacity .4s ease .6s;
+}
+.play-countdown strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.mode-title .play-countdown { opacity: 0; transition-delay: 0s; }
+/* On phones it sits just above the guess panel, over the bars, so give it a backing. */
+body:not(.wide) .play-countdown {
+  left: 0; bottom: var(--panel-h, 0px); font-size: .8rem;
+  padding: 3px 10px; background: var(--surface); border: 1px solid var(--border); border-bottom: none; border-left: none;
+}
 
 /* ===== Clue stack ===== */
 .clue-stack {
@@ -393,6 +414,17 @@ body:not(.wide) .result-head { margin-bottom: 8px; }
 }
 .bars .bar.today { background: var(--good); }
 .share-btn { width: 100%; margin-top: 18px; }
+.modal-wide { width: min(92vw, 620px); }
+.modal a { color: var(--accent); }
+.credits-filter {
+  width: 100%; padding: 8px 10px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-radius: 0; background: var(--surface);
+}
+.credits-list {
+  list-style: none; margin: 0; padding: 8px 0 0 !important; columns: 3 150px; column-gap: 16px;
+  max-height: 34vh; overflow-y: auto; font-size: .92rem; border-top: 1px solid var(--border);
+}
+.credits-list li { break-inside: avoid; padding: 1px 0; }
 .countdown-line { text-align: center; margin: 12px 0 0; }
 .countdown-line strong { color: var(--text); font-variant-numeric: tabular-nums; }
 
@@ -406,6 +438,13 @@ body:not(.wide) .result-head { margin-bottom: 8px; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ===== Small screens ===== */
+@media (max-width: 520px) {
+  /* The play-screen logo and tabs are invisible on the title screen; free their space. */
+  .mode-title .mini-logo, .mode-title .tabs { display: none; }
+}
+@media (max-width: 440px) {
+  .mode-play .extra-link { display: none; }
+}
 @media (max-width: 520px) {
   .topbar { gap: 10px; padding: 8px 12px; }
   .mini-logo { font-size: .95rem; letter-spacing: .02em; }

@@ -522,6 +522,8 @@
       } else {
         panel.style.top = '';
       }
+      // On phones the guess panel covers the bottom; the countdown sits just above it.
+      document.body.style.setProperty('--panel-h', wide ? '0px' : `${panel.offsetHeight}px`);
     }
     const gb = $('guess-btn');
     panel.style.setProperty('--guess-btn-w', `${gb.offsetWidth + 8}px`);
@@ -609,6 +611,26 @@
     $('stats-dialog').showModal();
   }
 
+  /* ---------- Credits ------------------------------------------------- */
+  let creditsBuilt = false;
+  function openCredits() {
+    if (!creditsBuilt) {
+      $('credits-list').innerHTML = SENATORS
+        .filter(s => s.imageSource)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(s => `<li data-name="${escapeHtml(s.name.toLowerCase())}"><a href="${escapeHtml(s.imageSource)}" target="_blank" rel="noopener">${escapeHtml(s.name)}</a></li>`)
+        .join('');
+      creditsBuilt = true;
+    }
+    document.querySelectorAll('dialog[open]').forEach(d => d.close());
+    $('credits-dialog').showModal();
+  }
+
+  function filterCredits() {
+    const q = $('credits-filter').value.trim().toLowerCase();
+    [...$('credits-list').children].forEach(li => { li.hidden = !!q && !li.dataset.name.includes(q); });
+  }
+
   /* ---------- Press-and-hold buttons ---------------------------------- */
   // `action` runs only after the button has been held for CFG.holdDuration ms
   // (mouse, touch, or Space/Enter). A quick tap does nothing.
@@ -666,8 +688,7 @@
     const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, sec = Math.floor(ms / 1000) % 60;
     const text = `${pad(h)}:${pad(m)}:${pad(sec)}`;
     $('countdown').textContent = text;
-    const tc = $('title-countdown');
-    if (tc) tc.textContent = text;
+    ['title-countdown', 'play-countdown'].forEach(id => { const el = $(id); if (el) el.textContent = text; });
   }
 
   /* ---------- Boot ----------------------------------------------------- */
@@ -677,11 +698,11 @@
     const playBtn = $('play-btn');
     if (rounds.length) {
       playBtn.textContent = `Play ${shortDate(DATE)}`;
-      $('meta').innerHTML = `Puzzle #${PUZZLE_NO}${IS_TODAY ? '' : ' · Archive'} · Next puzzle in <strong id="title-countdown">--:--:--</strong>`;
+      $('meta').innerHTML = `Puzzle #${PUZZLE_NO}${IS_TODAY ? '' : ' · Archive'} · Next puzzle in <strong id="title-countdown">--:--:--</strong> · <button class="link-btn" data-open-credits>Credits</button>`;
     } else {
       playBtn.textContent = 'No puzzle today';
       playBtn.disabled = true;
-      $('meta').innerHTML = `Check back tomorrow · Next puzzle in <strong id="title-countdown">--:--:--</strong>`;
+      $('meta').innerHTML = `Check back tomorrow · Next puzzle in <strong id="title-countdown">--:--:--</strong> · <button class="link-btn" data-open-credits>Credits</button>`;
     }
 
     playBtn.addEventListener('click', () => { if (rounds.length) setMode('play'); });
@@ -697,6 +718,8 @@
       if (btn.dataset.action === 'next') switchRound(btn.dataset.round);
     });
     $('help-btn').addEventListener('click', () => $('help-dialog').showModal());
+    document.querySelectorAll('[data-open-credits]').forEach(b => b.addEventListener('click', openCredits));
+    $('credits-filter').addEventListener('input', filterCredits);
     $('stats-btn').addEventListener('click', openStats);
     $('stats-share-btn').addEventListener('click', share);
     document.querySelectorAll('[data-stats-round]').forEach(b =>
