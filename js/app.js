@@ -18,9 +18,11 @@
   const T_ROTATE = 650;  // fan rotating to the next seat
   const T_SLIDE = 600;   // seat bar wiping away
   const TWO_LINE_CARD_H = 88; // px; card height used to size cards to the bars
-  const T_SPIN = 1300;   // fan spinning around on a round switch
+  const T_SPIN = 1300;   // fan spinning around on a round switch (a typical spin; longer spins take longer)
   const MIN_SPIN = 180;  // degrees the fan spins at least on a round switch
+  const SWAP_MARGIN = 25; // degrees: a bar starting this close to the swap point swaps on its next pass instead
   const SLIDE_LAG = 60;  // bar starts sliding just after the card under it is in place
+  const T_STEP = T_ROTATE + SLIDE_LAG + T_SLIDE + 120; // one seat's rotate-and-wipe in the win reveal
   const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ---------- Dates ---------------------------------------------------- */
@@ -68,7 +70,10 @@
   }
 
   /* ---------- Game state ----------------------------------------------- */
-  const day = PUZZLES[DATE];
+  // No puzzle written for this date: fall back to the first (earliest) set.
+  const FALLBACK_DATE = Object.keys(PUZZLES).sort()[0];
+  const day = PUZZLES[DATE] || PUZZLES[FALLBACK_DATE];
+  if (!PUZZLES[DATE] && day) console.warn(`[Senatordle] No puzzle for ${DATE}; using ${FALLBACK_DATE}'s.`);
   const rounds = CFG.rounds.filter(r => day && day[r.key] && BY_ID.has(day[r.key].answer));
   const puzzles = {};
   const games = {};
@@ -84,8 +89,14 @@
   const puzzle = () => puzzles[current];
   const game = () => games[current];
   const roundLabel = key => (CFG.rounds.find(r => r.key === key) || {}).label || key;
-  /** How many clues are on show for a round: all of them once it's won. */
-  const shownCount = key => (games[key].status === 'won' ? puzzles[key].clues.length : games[key].revealed);
+  /**
+   * How many clues are on show for a round: all of them once it's won. Right
+   * after a win, `winReveal` counts up to that one seat at a time.
+   */
+  const winReveal = {};
+  const shownCount = key => (games[key].status === 'won'
+    ? winReveal[key] ?? puzzles[key].clues.length
+    : games[key].revealed);
 
   /**
    * Which attributes search results should leave out for a round right now.
@@ -125,7 +136,6 @@
     if (s.id === puzzle().answer) {
       finish('won');
     } else {
-      toast(`Not ${s.name}`);
       advance();
     }
   }
@@ -161,7 +171,39 @@
     g.status = status;
     save();
     if (IS_TODAY) Store.recordResult(current, DATE, addDays(DATE, -1), status === 'won' ? g.revealed : null);
+    if (status === 'won' && !REDUCED && g.revealed < puzzle().clues.length) revealRest();
     render();
+  }
+
+  /**
+   * After a win, uncover the remaining clues one by one, each with the same
+   * rotate-and-wipe as a normal clue. When done, the last clue joins the list.
+   */
+  let revealTimer = null, revealKey = null;
+  function revealRest() {
+    const key = current;
+    const n = puzzle().clues.length;
+    revealKey = key;
+    winReveal[key] = game().revealed;
+    const step = () => {
+      if (winReveal[key] < n) {
+        winReveal[key] += 1;
+        render();
+        revealTimer = setTimeout(step, T_STEP);
+      } else {
+        stopReveal();
+        render(); // no newest-clue box any more: the last clue moves up into the list
+      }
+    };
+    revealTimer = setTimeout(step, 500);
+  }
+
+  /** End a win reveal early (e.g. on leaving the round): every clue counts as shown. */
+  function stopReveal() {
+    clearTimeout(revealTimer);
+    revealTimer = null;
+    if (revealKey) delete winReveal[revealKey];
+    revealKey = null;
   }
 
   function save() {
@@ -175,6 +217,7 @@
    */
   function switchRound(key) {
     if (!puzzles[key] || key === current || switching) return;
+    stopReveal();
     search.reset();
     if (mode !== 'play' || REDUCED) { current = key; render(); return; }
     document.body.classList.toggle('round-hard', key === 'hard');
@@ -221,21 +264,28 @@
     const newCenters = Chart.centers(n);
 
     // Spin far enough that every bar, old and new, passes the swap point (0°),
-    // ending with the fan at its target angle.
+    // ending with the fan at its target angle. A bar that starts right at the
+    // swap point (e.g. the rightmost bar on the title screen) must go all the
+    // way around first, so it changes last rather than at once.
+    // Old bars swap out on that first allowed pass and new bars appear on
+    // their last pass, so old and new bars never overlap.
     const mod = (a, m) => ((a % m) + m) % m;
     const toSwap = c => mod(-r0 - c, 360); // degrees until a bar at angle c reaches 0°
-    const need = Math.max(...oldCenters.map(toSwap), ...newCenters.map(toSwap));
+    const oldNeed = oldCenters.map(c => toSwap(c) + (toSwap(c) < SWAP_MARGIN ? 360 : 0));
+    const need = Math.max(...oldNeed, ...newCenters.map(toSwap));
     let D = mod(target - r0, 360);
     while (D < need || D < MIN_SPIN) D += 360;
     const r1 = r0 + D;
-    const hideAt = oldCenters.map(c => r0 + toSwap(c));           // old bar's first pass
-    const showAt = newCenters.map(c => r1 - mod(c + r1, 360));    // new bar's last pass
+    const lastPass = c => r1 - mod(c + r1, 360);
+    const hideAt = oldNeed.map(d => r0 + d);
+    const showAt = newCenters.map(lastPass);
+    const duration = T_SPIN * Math.sqrt(Math.max(D, 360) / 360); // longer spins go a little longer
 
     const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
     let start = null, cleared = false;
     function frame(now) {
       if (start === null) start = now;
-      const t = Math.min(1, (now - start) / T_SPIN);
+      const t = Math.min(1, (now - start) / duration);
       const rot = r0 + D * ease(t);
       setRotation(rot);
       oldSeats.forEach((seat, i) => { if (rot >= hideAt[i]) seat.style.visibility = 'hidden'; });
@@ -267,6 +317,7 @@
 
   function setMode(next) {
     if (next === mode || switching) return;
+    stopReveal();
     mode = next;
     document.body.classList.toggle('mode-title', mode === 'title');
     document.body.classList.toggle('mode-play', mode === 'play');
@@ -386,7 +437,8 @@
         stackEl.appendChild(li);
         uncover(li, revealDelay, underBar && i === count - 1);
       }
-      li.classList.toggle('latest', i === count - 1);
+      // A finished win has no newest-clue box: every clue is a plain line.
+      li.classList.toggle('latest', i === count - 1 && !(g.status === 'won' && winReveal[current] === undefined));
       li.querySelector('.clue-guesses').innerHTML =
         g.guesses.filter(x => x.clue === i + 1).map(x => guessLine(x, p.answer)).join('');
     }
