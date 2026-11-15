@@ -37,10 +37,14 @@ window.SenateChart = (function () {
            `L ${p(R_IN, h)} A ${R_IN} ${R_IN} 0 0 0 ${p(R_IN, -h)} Z`;
   }
 
-  /** Draw `n` bars into the <g> and return the bar elements (index 0 = clue 1). */
-  function build(group, n) {
+  /**
+   * Draw `n` bars into the <g> and return the bar elements (index 0 = clue 1).
+   * With `append`, existing bars are kept (used while one round's bars hand off
+   * to the next round's during a spin).
+   */
+  function build(group, n, append) {
     const { width, centers } = fan(n);
-    group.innerHTML = '';
+    if (!append) group.innerHTML = '';
     const d = barPath(width);
     return centers.map((angle, i) => {
       const seat = document.createElementNS(NS, 'g');
@@ -59,6 +63,11 @@ window.SenateChart = (function () {
   /** Rotation (deg) that brings bar `index` to point straight left (180°). */
   function rotationFor(index, n) {
     return 180 - fan(n).centers[index];
+  }
+
+  /** Each bar's center angle (deg, before the fan's rotation) for `n` bars. */
+  function centers(n) {
+    return fan(n).centers;
   }
 
   /**
@@ -142,5 +151,5 @@ window.SenateChart = (function () {
     return `polygon(${pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(', ')})`;
   }
 
-  return { build, rotationFor, layout, fitCard, barClip, barHalfAt, R_HUB };
+  return { build, rotationFor, centers, layout, fitCard, barClip, barHalfAt, R_HUB };
 })();

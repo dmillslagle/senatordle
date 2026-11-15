@@ -18,8 +18,8 @@
   const T_ROTATE = 650;  // fan rotating to the next seat
   const T_SLIDE = 600;   // seat bar wiping away
   const TWO_LINE_CARD_H = 88; // px; card height used to size cards to the bars
-  const T_OUT = 650;     // bars spinning out when switching rounds
-  const SWITCH_SPIN = 120; // degrees the fan spins out (and back in) on a round switch
+  const T_SPIN = 1300;   // fan spinning around on a round switch
+  const MIN_SPIN = 180;  // degrees the fan spins at least on a round switch
   const SLIDE_LAG = 60;  // bar starts sliding just after the card under it is in place
   const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -84,6 +84,8 @@
   const puzzle = () => puzzles[current];
   const game = () => games[current];
   const roundLabel = key => (CFG.rounds.find(r => r.key === key) || {}).label || key;
+  /** How many clues are on show for a round: all of them once it's won. */
+  const shownCount = key => (games[key].status === 'won' ? puzzles[key].clues.length : games[key].revealed);
 
   /**
    * Which attributes search results should leave out for a round right now.
@@ -181,47 +183,82 @@
 
   /**
    * The seating chart's transition, used when starting play and when switching
-   * rounds:
-   *  1. Out: every bar wipes back into the circle while the fan spins forward,
-   *     and the clues fade out.
-   *  2. `swap()` runs (e.g. changes round), and the bars are rebuilt hidden in
-   *     the circle, a spin's worth behind their target.
-   *  3. In: the fan spins into place and the bars that still hide clues grow
-   *     back out, along with the current clue's bar; earlier clues reappear.
-   *  4. The current clue's bar wipes away, uncovering its clue.
+   * rounds. The bars never shrink: the fan spins around the circle, and as each
+   * bar passes the point straight right of the circle (offscreen, or behind the
+   * far edge of the chart) it is swapped for the new round's bar in that spot,
+   * in the new round's color and state. The clues fade out meanwhile and come
+   * back once the fan settles, when the current clue's bar wipes away.
    */
   let switching = false;
-  let goneOverride = null; // while spinning in: how many bars count as revealed
   function spinOutIn(swap) {
     switching = true;
     stackEl.classList.add('switching');
-    seats.forEach(seat => { seat.style.setProperty('--d', '0ms'); seat.classList.add('gone'); seat.classList.remove('next'); });
-    setRotation(rotation + SWITCH_SPIN);
+    const oldSeats = seats;
+    const oldCenters = Chart.centers(oldSeats.length);
+    const r0 = rotation;
 
-    setTimeout(() => {
-      swap();
-      const n = puzzle().clues.length;
-      const g = game();
-      seatsEl.classList.add('instant');
-      buildSeats(n, `${current}:${n}`);
-      seats.forEach(seat => { seat.style.setProperty('--d', '0ms'); seat.classList.add('gone'); });
-      setRotation(Chart.rotationFor(g.revealed - 1, n) - SWITCH_SPIN);
+    swap();
+    const n = puzzle().clues.length;
+    const g = game();
+    const shown = shownCount(current);
+    const target = Chart.rotationFor(shown - 1, n);
+    renderTabs();
+    renderHub();
+    renderPanel();
+    if (current) search.refresh();
+
+    // New bars in the same rotating group, hidden until they pass the swap point.
+    seatsEl.classList.add('instant');
+    const newSeats = Chart.build(seatsEl, n, true);
+    const covered = g.status === 'playing' ? shown - 1 : shown; // current clue stays covered
+    newSeats.forEach((seat, i) => {
+      seat.setAttribute('data-round', current);
+      seat.style.setProperty('--d', '0ms');
+      seat.classList.toggle('gone', i < covered);
+      seat.classList.toggle('next', g.status === 'playing' && i === g.revealed);
+      seat.style.visibility = 'hidden';
+    });
+    const newCenters = Chart.centers(n);
+
+    // Spin far enough that every bar, old and new, passes the swap point (0°),
+    // ending with the fan at its target angle.
+    const mod = (a, m) => ((a % m) + m) % m;
+    const toSwap = c => mod(-r0 - c, 360); // degrees until a bar at angle c reaches 0°
+    const need = Math.max(...oldCenters.map(toSwap), ...newCenters.map(toSwap));
+    let D = mod(target - r0, 360);
+    while (D < need || D < MIN_SPIN) D += 360;
+    const r1 = r0 + D;
+    const hideAt = oldCenters.map(c => r0 + toSwap(c));           // old bar's first pass
+    const showAt = newCenters.map(c => r1 - mod(c + r1, 360));    // new bar's last pass
+
+    const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    let start = null, cleared = false;
+    function frame(now) {
+      if (start === null) start = now;
+      const t = Math.min(1, (now - start) / T_SPIN);
+      const rot = r0 + D * ease(t);
+      setRotation(rot);
+      oldSeats.forEach((seat, i) => { if (rot >= hideAt[i]) seat.style.visibility = 'hidden'; });
+      newSeats.forEach((seat, i) => { if (rot >= showAt[i]) seat.style.visibility = ''; });
+      if (!cleared && t >= 0.5) {
+        cleared = true;
+        stackEl.innerHTML = '';
+        stackKey = current;
+        stackEl.classList.remove('switching');
+      }
+      if (t < 1) { requestAnimationFrame(frame); return; }
+
+      oldSeats.forEach(seat => seat.remove());
+      newSeats.forEach(seat => { seat.style.visibility = ''; });
+      seats = newSeats;
+      seatsKey = `${current}:${n}`;
+      setRotation(target); // same angle, without the extra turns
       seatsEl.getBoundingClientRect();
       seatsEl.classList.remove('instant');
-      stackEl.innerHTML = '';
-      stackKey = current;
-      stackEl.classList.remove('switching');
-
-      // Spin in with the current clue still covered (if the round is in progress).
-      goneOverride = g.status === 'playing' ? g.revealed - 1 : null;
-      switchCardDelay = T_ROTATE;
-      render();
-      setTimeout(() => {
-        goneOverride = null;
-        render(); // the current clue's bar wipes away
-        switching = false;
-      }, T_ROTATE);
-    }, T_OUT);
+      switching = false;
+      render(); // earlier clues reappear and the current clue's bar wipes away
+    }
+    requestAnimationFrame(frame);
   }
 
   /* ---------- Screens -------------------------------------------------- */
@@ -244,7 +281,7 @@
       render();
     }
     if (mode === 'play' && game().status === 'playing' && matchMedia('(pointer: fine)').matches) {
-      setTimeout(() => $('guess-input').focus({ preventScroll: true }), REDUCED ? 0 : T_OUT + T_ROTATE);
+      setTimeout(() => $('guess-input').focus({ preventScroll: true }), REDUCED ? 0 : T_SPIN);
     }
   }
 
@@ -269,6 +306,7 @@
     const key = `${current}:${n}`;
     if (seatsKey !== key) buildSeats(n, key);
 
+    seats.forEach(seat => seat.setAttribute('data-round', mode === 'title' ? 'normal' : current));
     if (mode === 'title') {
       seats.forEach(seat => { seat.classList.remove('gone', 'next'); seat.style.removeProperty('--d'); });
       setRotation(0);
@@ -276,8 +314,8 @@
     }
 
     const g = game();
-    const shown = goneOverride ?? g.revealed; // bars currently counted as revealed
-    const target = Chart.rotationFor(g.revealed - 1, n);
+    const shown = shownCount(current); // bars currently counted as revealed
+    const target = Chart.rotationFor(shown - 1, n);
     const rotating = target !== rotation;
     let delay = pendingDelay || (rotating && !REDUCED ? T_ROTATE : 0);
     pendingDelay = 0;
@@ -289,7 +327,7 @@
         newlyGone = true;
       }
       seat.classList.toggle('gone', gone);
-      seat.classList.toggle('next', g.status === 'playing' && goneOverride === null && i === g.revealed);
+      seat.classList.toggle('next', g.status === 'playing' && i === g.revealed);
     });
     setRotation(target);
     return newlyGone ? delay : -1;
@@ -337,7 +375,7 @@
     if (stackKey !== current) { stackEl.innerHTML = ''; stackKey = current; }
     const p = puzzle();
     const g = game();
-    const count = goneOverride ?? g.revealed;
+    const count = shownCount(current);
     for (let i = 0; i < count; i++) {
       let li = stackEl.children[i];
       if (!li) {
@@ -348,7 +386,7 @@
         stackEl.appendChild(li);
         uncover(li, revealDelay, underBar && i === count - 1);
       }
-      li.classList.toggle('latest', i === g.revealed - 1);
+      li.classList.toggle('latest', i === count - 1);
       li.querySelector('.clue-guesses').innerHTML =
         g.guesses.filter(x => x.clue === i + 1).map(x => guessLine(x, p.answer)).join('');
     }
@@ -391,7 +429,6 @@
 
     // Newest card centered on the seat; earlier ones stacked above, clear of the
     // bar's full thickness so the bar never covers them.
-    // (While bars spin in, the current clue isn't shown yet: just leave its space.)
     const latest = cards[cards.length - 1];
     const hasLatest = latest.classList.contains('latest');
     let latestH = TWO_LINE_CARD_H;
@@ -465,16 +502,13 @@
   }
 
   /* ---------- Render & layout ------------------------------------------ */
-  let switchCardDelay = 0; // after a round switch, clues appear once the bars have spun in
-
   function render() {
     document.body.classList.toggle('round-hard', mode === 'play' && current === 'hard');
     renderTabs();
     const revealDelay = renderChart();
     renderHub();
     // A clue is uncovered by its bar only when that bar is wiping away right now.
-    renderStack(revealDelay >= 0 ? revealDelay : switchCardDelay, revealDelay >= 0);
-    switchCardDelay = 0;
+    renderStack(Math.max(revealDelay, 0), revealDelay >= 0);
     renderPanel();
     if (current) search.refresh();
     layout();

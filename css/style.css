@@ -7,8 +7,12 @@
   --text: #161b2b;
   --muted: #646b80;
   --border: #ddd8cc;
-  --hub: #2a74ba;          /* center circle and seating bars */
-  --ink-next: #4a8fd0;     /* the next bar to be revealed */
+  --hub-normal: #2a74ba;   /* center circle and seating bars */
+  --next-normal: #4a8fd0;  /* the next bar to be revealed */
+  --hub-hard: #dc6a71;     /* same, in the Hard round */
+  --next-hard: #eb9da1;
+  --hub: var(--hub-normal);
+  --ink-next: var(--next-normal);
   --font-display: "Cinzel", "Trajan Pro", Georgia, serif;
   --font-body: "EB Garamond", Garamond, Georgia, serif;
   --hub-text: #ffffff;
@@ -35,8 +39,10 @@
     --text: #e8eaf0;
     --muted: #9aa1b4;
     --border: #2e3648;
-    --hub: #2f7cc4;
-    --ink-next: #5296d6;
+    --hub-normal: #2f7cc4;
+    --next-normal: #5296d6;
+    --hub-hard: #c75860;
+    --next-hard: #dc858b;
     --accent: #5b7fd6;
     --good: #5cc48a;
     --good-bg: #183323;
@@ -66,16 +72,14 @@ body {
               --surface .9s ease, --surface-2 .9s ease, --border .9s ease;
 }
 body.round-hard {
-  --hub: #dc6a71;
-  --ink-next: #eb9da1;
+  --hub: var(--hub-hard);
+  --ink-next: var(--next-hard);
   --bg: #e7e1de;
   --bg-glow: #f1ece9;
   --accent: #8e2f37;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.round-hard {
-    --hub: #c75860;
-    --ink-next: #dc858b;
     --bg: #151113;
     --bg-glow: #221a1d;
     --accent: #d06871;
@@ -113,11 +117,15 @@ button, input, select { font: inherit; color: inherit; }
 /* A revealed bar is wiped away from its outer end toward the circle, like the
    Skip button's fill (bars point along +x before rotation, so that's inset from the right). */
 .seat .bar {
-  fill: var(--hub);
+  fill: var(--hub-normal);
   clip-path: inset(0 0 0 0);
   transition: clip-path .6s cubic-bezier(.45, 0, .55, 1) var(--d, 0ms), fill .3s;
 }
-.seat.next .bar { fill: var(--ink-next); }
+/* Each bar carries its round's color itself, so during a round switch the bars
+   change color one at a time as they pass offscreen (see spinOutIn in app.js). */
+.seat.next .bar { fill: var(--next-normal); }
+.seat[data-round="hard"] .bar { fill: var(--hub-hard); }
+.seat[data-round="hard"].next .bar { fill: var(--next-hard); }
 .seat.gone .bar { clip-path: inset(0 100% 0 0); }
 .hub { fill: var(--hub); }
 
