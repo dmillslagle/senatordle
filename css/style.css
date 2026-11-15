@@ -442,7 +442,8 @@ body:not(.wide) .result-head { margin-bottom: 8px; }
   /* The play-screen logo and tabs are invisible on the title screen; free their space. */
   .mode-title .mini-logo, .mode-title .tabs { display: none; }
 }
-@media (max-width: 440px) {
+/* Very narrow phones: drop Contact during play so the top row fits. */
+@media (max-width: 385px) {
   .mode-play .extra-link { display: none; }
 }
 @media (max-width: 520px) {
