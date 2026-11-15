@@ -167,6 +167,13 @@ button, input, select { font: inherit; color: inherit; }
   display: flex; align-items: center; gap: 6px;
 }
 .tab:hover { background: var(--surface-2); }
+.archive-btn {
+  padding: 6px 12px; border-radius: 0; cursor: pointer; color: var(--text);
+  border: 1px solid var(--border); background: var(--surface); font: 700 .8rem/1.2 var(--font-display); letter-spacing: .06em;
+  display: flex; align-items: center; gap: 6px;
+}
+.archive-btn:hover { background: var(--surface-2); }
+@media (max-width: 520px) { .archive-label { display: none; } .archive-btn { padding: 6px 9px; } }
 .tab.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .tab-status { font-size: .9em; }
 .tab-status:empty { display: none; }
@@ -423,6 +430,28 @@ body:not(.wide) .result-head { margin-bottom: 8px; }
 .bars .bar.today { background: var(--good); }
 .share-btn { width: 100%; margin-top: 18px; }
 .modal-wide { width: min(92vw, 620px); }
+
+/* Archive calendar */
+.cal-month { font: 700 1rem/1.2 var(--font-display); letter-spacing: .04em; text-align: center; margin: 4px 0 10px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-dow { text-align: center; font-size: .75rem; color: var(--muted); padding-bottom: 2px; }
+.cal-day {
+  position: relative; aspect-ratio: 1; display: grid; place-items: center;
+  border: 1px solid transparent; font-variant-numeric: lining-nums; color: var(--muted); opacity: .55;
+}
+a.cal-day {
+  opacity: 1; color: var(--text); text-decoration: none; font-weight: 600;
+  border-color: var(--border); background: var(--surface-2, var(--surface));
+}
+a.cal-day:hover { border-color: var(--accent); }
+a.cal-day.current { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.cal-today { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cal-marks { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: .6rem; line-height: 1; letter-spacing: 1px; }
+.cal-marks .won { color: var(--good); }
+.cal-marks .lost { color: var(--bad); }
+.cal-marks .progress { color: var(--muted); }
+a.cal-day.current .cal-marks span { color: inherit; }
+.cal-legend { font-size: .8rem; margin-top: 12px; }
 .modal a { color: var(--accent); }
 .credits-filter {
   width: 100%; padding: 8px 10px; margin-bottom: 8px;

@@ -697,6 +697,54 @@
     $('stats-dialog').showModal();
   }
 
+  /* ---------- Archive ------------------------------------------------- */
+  // Months the archive calendar shows, as [year, monthIndex].
+  const ARCHIVE_MONTHS = [[2026, 10]]; // November 2026
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  /** A day can be played if it has a complete normal/hard pair and isn't in the future. */
+  function isPlayableDay(iso) {
+    const d = PUZZLES[iso];
+    return !!d && iso <= TODAY && CFG.rounds.every(r => d[r.key] && BY_ID.has(d[r.key].answer));
+  }
+
+  function dayMarks(iso) {
+    return CFG.rounds.map(r => {
+      const g = Store.loadGame(iso, r.key);
+      if (g.status === 'won') return '<span class="won">✓</span>';
+      if (g.status === 'lost') return '<span class="lost">✗</span>';
+      if (g.guesses.length) return '<span class="progress">•</span>';
+      return '';
+    }).join('');
+  }
+
+  function renderArchive() {
+    $('archive-body').innerHTML = ARCHIVE_MONTHS.map(([y, m]) => {
+      const first = new Date(y, m, 1).getDay();
+      const days = new Date(y, m + 1, 0).getDate();
+      let cells = DOW.map(d => `<div class="cal-dow">${d}</div>`).join('');
+      for (let i = 0; i < first; i++) cells += '<div></div>';
+      for (let d = 1; d <= days; d++) {
+        const iso = `${y}-${pad(m + 1)}-${pad(d)}`;
+        const cls = `${iso === TODAY ? ' cal-today' : ''}${iso === DATE ? ' current' : ''}`;
+        if (isPlayableDay(iso)) {
+          const href = iso === TODAY ? location.pathname : `${location.pathname}?date=${iso}`;
+          cells += `<a class="cal-day${cls}" href="${href}" aria-label="Play ${FULL_MONTHS[m]} ${d}">${d}<span class="cal-marks">${dayMarks(iso)}</span></a>`;
+        } else {
+          cells += `<div class="cal-day${cls}" aria-disabled="true">${d}</div>`;
+        }
+      }
+      return `<div class="cal-month">${FULL_MONTHS[m]} ${y}</div><div class="cal-grid">${cells}</div>`;
+    }).join('') + '<p class="muted cal-legend">Marks show your Normal and Hard results: ✓ solved, ✗ missed, • in progress. Archive games do not count toward your stats.</p>';
+  }
+
+  function openArchive() {
+    renderArchive();
+    document.querySelectorAll('dialog[open]').forEach(d => d.close());
+    $('archive-dialog').showModal();
+  }
+
   /* ---------- Credits ------------------------------------------------- */
   let creditsBuilt = false;
   function openCredits() {
@@ -807,6 +855,7 @@
     document.querySelectorAll('[data-open-credits]').forEach(b => b.addEventListener('click', openCredits));
     $('credits-filter').addEventListener('input', filterCredits);
     $('stats-btn').addEventListener('click', openStats);
+    $('archive-btn').addEventListener('click', openArchive);
     $('stats-share-btn').addEventListener('click', share);
     document.querySelectorAll('[data-stats-round]').forEach(b =>
       b.addEventListener('click', () => { statsRound = b.dataset.statsRound; renderStats(); }));
